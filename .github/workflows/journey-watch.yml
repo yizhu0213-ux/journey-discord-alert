@@ -1,0 +1,45 @@
+name: 旅程开门 Discord 提醒
+
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      test_notification:
+        description: '发送测试消息（不判断社区是否开门）'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: journey-invite-watch
+  cancel-in-progress: false
+
+jobs:
+  check-invite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check invite / send optional test
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USER_ID: ${{ vars.DISCORD_USER_ID }}
+          TEST_NOTIFICATION: ${{ inputs.test_notification }}
+        run: python watch.py
+      - name: Persist last status if changed
+        run: |
+          if git diff --quiet -- state.json; then
+            echo "No state change."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "Update Journey invite status"
+            git push
+          fi
